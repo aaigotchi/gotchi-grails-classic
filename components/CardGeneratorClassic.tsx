@@ -55,6 +55,14 @@ const COLLATERALS: Record<string, string> = {
   "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca": "USDbC"
 };
 
+// Trait icons (PNG as base64)
+const TRAIT_ICONS = {
+  energy: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAMAAADVRocKAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAJxQTFRFAHP/ANXWNP8MEv/39fqQDP/6pfy03/ua/PqM0Pugx/uk/fqMCf/79/qPB//80/ufaf3PA//+2/ub5fuXFf/1Df/5EP/4Lv7q9PqQWP3X/vqLuPurufurGf/09vqPQv7hGP/0Bf/90vufh/zCjvy+BP/9Tv3cC//6+PqON/7m5/qWEf/3Hf7ycv3LJP7vCv/65vqW6fqVvvup////tKyAWQAAADR0Uk5T////////////////////////////////////////////////////////////////////AEtXImUAAAESSURBVHja7NnZTsJQFEbhCsqkjDI4MTgwCDig7/9urp20CTGgpw27vfm/m6a92OviUE6bRt/OIgUUUECBEwciKFBcIIopUEzABvegQDEBG3qDayiQf8AGXmKCEhTIN2DD7lDDORTIN5Asrg1fIetwBbIFbJAtahPJ4iaBtBRIH7CLVXxihzXsvI0vVPCMDhZ4xTv6uMAjutj/QSgQHrCL92igjifY0c4fYMNf8IZbTDHCFkNcYY7fN6QCYYEsN9FZbIYBWjj0h6hAWCD1JhIHxtjgA8c2JAVOH9hf4DKW+OuBQAG/gA23Tea/BzIFfAKhwxXwC9gGH/pCooBPIM0LoQI+AbcvIAq4UEABBRQI8CPAAKSO49xxztG9AAAAAElFTkSuQmCC",
+  aggression: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAMAAADVRocKAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAKVQTFRFnwCC/wEA2xEA2hAA/5cA4iwA/ygA93oA/wUA/wgA/10A7VYA7VUA/xMA/wAA6EIA/5EA4isA6EEA/xEA/5IA4SgA+H0A/y8A5z4A+H8A/4MA/2MA930A/zIA/4IA/wQA4i0A/2QA7VQA/y0A7FEA7FMA/4YA5z8A/1sA/yUA5j0A/zEA/5YA7FIA/2UA/4UA50AA93wA/wkA/5gA/1gA/2EA////TeSKowAAADd0Uk5T////////////////////////////////////////////////////////////////////////ABBZnYsAAAFGSURBVHja7JjXbgIxEEWXNNJJJb0Q0guk//+n5VwpI60iFna9ixQl97yMZGyfh8EzXmefUyazwII/KMjAAgv+s0Cbt6CKxIJ0QfbNz7EzGDVeJLWgniCfUMVZ2AbF/Pg6WNC8IBYvQSRxF/qgGGPxe9JJtqBUsdPiBbiBS3iHJ7iHO5hU+CyoJ4hEPsMRtOEUFD9gH8YVOgvSBbFoBuZhFY5hAx5BUZIr2ATNKxJZUE0Qk9RoFmENTmAZhjAHb6B4CLewB2pCmh8NKi+yoJqgKMkrcAA7oM0VX+AClOS4BCT/iyyYWOw6MIAuXINiD7agkWpqQammL4mSrUOn4qfNNd7YrcKCws1fIRJ5Dg+gw9fY7dqCsR+B+Y+7KH5qQtHkyzyQWFBPMOrRQ819qq8tFvhZ85cL/LxvgQVpWGCBBRaU4EuAAQAgpfLsXhdVvwAAAABJRU5ErkJggg==",
+  spookiness: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAMAAADVRocKAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAA9QTFRF////fwD/7dP99pbG////bvVQRwAAAAV0Uk5T/////wD7tg5TAAAA2ElEQVR42uzZ2wqEMAxFUefy/988I0zhEJK0aTt92udFRcgSik3E6/3nXAAAAAAbgYcTgDNAK3ZJnr+MQABrgC1soxDAfqBX3EIRAjAHVIr3EIBzwB2APYAW16Zyn3uLqve8hQZYA6Lz6B7AfkAXNNvksg0PoAZ4g+5M01EEYBxohSPA+wiMAG0+AHUga+ivb/Q4MgAA1IBsU6sAuukBjAM9pBVuiQDbdABqQPbCaTOJHmR6qgBIATtYabZMdgAuoEVmrgHWAPszYuYaYB3gVyMAAMBh4CPAACcCVRFZjFt4AAAAAElFTkSuQmCC",
+  brain: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAMAAADVRocKAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAAxQTFRF6Une/3z3pQDZ////DVJK4AAAAAR0Uk5T////AEAqqfQAAADSSURBVHja7NnBDgIhDIRh1Pd/Z+VAMpm0CEv3svl70RR3PpOKZrF9bq4GAAAAAPAI4C210geoBfrFTWqEZX2AWkBDXr/SsKwPUAd4yCgFvJ8hAPuABvgg+/O+7j19dASgBlgZMkAN4Bd7kA45AiIE4DqQbbboB2c2aIBrwGzQPmR/LUAtEH3pKTD7IACcA9Gwo42mawDnwD8k22izG0KAMyALiN4AQB2QDVrDZ+vbd5kAbeUwcJSHeW2ftgBsH46vHsYC3AfwFwsAAADAY4GvAAMAerFLQaVdHewAAAAASUVORK5CYII="
+};
+
 const ABI = [
   {
     "inputs": [{"internalType": "uint256", "name": "_tokenId", "type": "uint256"}],
@@ -195,9 +203,19 @@ export default function CardGeneratorClassic({
               }
             }
 
+            // Remove ALL background elements
             const cleanSvg = svg
+              // Remove gotchi-bg group
               .replace(/<g class="gotchi-bg">[\s\S]*?<\/g>/g, '')
-              .replace(/<rect[^>]*class="[^"]*wearable-bg[^"]*"[^>]*\/>/g, '');
+              // Remove wearable-bg slots
+              .replace(/<g class="wearable-bg">[\s\S]*?<\/g>/g, '')
+              // Remove any rect with wearable-bg class
+              .replace(/<rect[^>]*class="[^"]*wearable-bg[^"]*"[^>]*\/?>/g, '')
+              // Remove pattern fills that create backgrounds
+              .replace(/<defs[^>]*>[\s\S]*?<\/defs>/g, '')
+              .replace(/<mask[^>]*>[\s\S]*?<\/mask>/g, '')
+              // Remove any paths in gotchi-bg
+              .replace(/<path[^>]*class="[^"]*gotchi-bg[^"]*"[^>]*\/?>/g, '');
 
             const haunt = parseInt(gotchiId) <= 10000 ? 1 : 2;
 
@@ -419,14 +437,14 @@ export default function CardGeneratorClassic({
             }}
           >
             {[
-              { label: 'NRG', icon: '⚡', value: gotchiData.traits.energy, max: 100 },
-              { label: 'AGG', icon: '🔥', value: gotchiData.traits.aggression, max: 100 },
-              { label: 'SPK', icon: '👻', value: gotchiData.traits.spookiness, max: 100 },
-              { label: 'BRN', icon: '🧠', value: gotchiData.traits.brainSize, max: 100 }
+              { label: 'NRG', icon: TRAIT_ICONS.energy, value: gotchiData.traits.energy, max: 100 },
+              { label: 'AGG', icon: TRAIT_ICONS.aggression, value: gotchiData.traits.aggression, max: 100 },
+              { label: 'SPK', icon: TRAIT_ICONS.spookiness, value: gotchiData.traits.spookiness, max: 100 },
+              { label: 'BRN', icon: TRAIT_ICONS.brain, value: gotchiData.traits.brainSize, max: 100 }
             ].map((stat, i) => (
               <div key={i} className="flex justify-between items-center my-2 text-[11px] tracking-wider">
                 <span className="text-[#2d3436] font-bold min-w-[70px] flex items-center gap-1.5">
-                  <span className="text-base">{stat.icon}</span>
+                  <img src={stat.icon} alt={stat.label} className="w-5 h-5" style={{ imageRendering: 'pixelated' }} />
                   {stat.label}
                 </span>
                 <div 
