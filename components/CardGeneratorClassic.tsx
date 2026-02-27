@@ -203,19 +203,14 @@ export default function CardGeneratorClassic({
               }
             }
 
-            // Remove ALL background elements
+            // Remove ALL background elements (the purple/colored background layer)
             const cleanSvg = svg
-              // Remove gotchi-bg group
+              // Remove wearable-bg slot (this contains the colored background!)
+              .replace(/<g class="gotchi-wearable wearable-bg">[\s\S]*?<\/g>/g, '')
+              // Remove gotchi-bg group  
               .replace(/<g class="gotchi-bg">[\s\S]*?<\/g>/g, '')
-              // Remove wearable-bg slots
-              .replace(/<g class="wearable-bg">[\s\S]*?<\/g>/g, '')
-              // Remove any rect with wearable-bg class
-              .replace(/<rect[^>]*class="[^"]*wearable-bg[^"]*"[^>]*\/?>/g, '')
-              // Remove pattern fills that create backgrounds
-              .replace(/<defs[^>]*>[\s\S]*?<\/defs>/g, '')
-              .replace(/<mask[^>]*>[\s\S]*?<\/mask>/g, '')
-              // Remove any paths in gotchi-bg
-              .replace(/<path[^>]*class="[^"]*gotchi-bg[^"]*"[^>]*\/?>/g, '');
+              // Remove any standalone wearable-bg
+              .replace(/<g class="wearable-bg">[\s\S]*?<\/g>/g, '');
 
             const haunt = parseInt(gotchiId) <= 10000 ? 1 : 2;
 
