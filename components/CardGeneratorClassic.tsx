@@ -27,7 +27,6 @@ interface GotchiData {
 const DIAMOND_ADDRESS = "0xA99c4B08201F2913Db8D28e71d020c4298F29dBF";
 const SUBGRAPH_URL = 'https://api.goldsky.com/api/public/project_cmh3flagm0001r4p25foufjtt/subgraphs/aavegotchi-core-base/prod/gn';
 
-// Multiple RPC endpoints for fallback
 const BASE_RPC_URLS = [
   'https://base.gateway.tenderly.co',
   'https://base-mainnet.public.blastapi.io',
@@ -101,27 +100,14 @@ const ABI = [
   }
 ];
 
-async function querySubgraph(tokenId: string): Promise<string | null> {
-  const query = `{
-    aavegotchi(id: "${tokenId}") {
-      withSetsRarityScore
-    }
-  }`;
-
-  try {
-    const response = await fetch(SUBGRAPH_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query })
-    });
-
-    const result = await response.json();
-    return result.data?.aavegotchi?.withSetsRarityScore || null;
-  } catch (error) {
-    console.warn('Failed to fetch withSetsRarityScore from subgraph:', error);
-    return null;
-  }
-}
+const rarityColors: Record<string, string> = {
+  common: "#806AFB",
+  uncommon: "#20C9C0",
+  rare: "#59BCFF",
+  legendary: "#FFC36B",
+  mythical: "#FF96FF",
+  godlike: "#51FFA8"
+};
 
 function getRarity(brs: number): string {
   if (brs >= 580) return "godlike";
@@ -130,19 +116,16 @@ function getRarity(brs: number): string {
   return "common";
 }
 
-const rarityColors: Record<string, string> = {
-  godlike: "#51FFA8",
-  mythical: "#FF96FF",
-  legendary: "#FFC36B",
-  rare: "#59BCFF",
-  uncommon: "#20C9C0",
-  common: "#806AFB"
-};
-
-export default function CardGeneratorClassic({ gotchiId, hideButtons = false }: { gotchiId: string; hideButtons?: boolean }) {
+export default function CardGeneratorClassic({ 
+  gotchiId, 
+  hideButtons = false 
+}: { 
+  gotchiId: string; 
+  hideButtons?: boolean;
+}) {
   const [gotchiData, setGotchiData] = useState<GotchiData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [inGallery, setInGallery] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -153,9 +136,7 @@ export default function CardGeneratorClassic({ gotchiId, hideButtons = false }: 
       try {
         const gallery = JSON.parse(stored);
         setInGallery(gallery.includes(gotchiId));
-      } catch (e) {
-        // Ignore
-      }
+      } catch (e) {}
     }
   }, [gotchiId]);
 
@@ -163,108 +144,95 @@ export default function CardGeneratorClassic({ gotchiId, hideButtons = false }: 
     async function fetchGotchi() {
       try {
         setLoading(true);
-        setError(null);
+        setError("");
 
-        let gotchi, svg, withSetsBRS;
-        let lastError;
-        
+        let lastError: Error | null = null;
+        let client = null;
+
         for (const rpcUrl of BASE_RPC_URLS) {
           try {
-            const client = createPublicClient({
+            client = createPublicClient({
               chain: base,
-              transport: http(rpcUrl, {
-                timeout: 10000,
-                retryCount: 2
-              })
+              transport: http(rpcUrl, { timeout: 10000, retryCount: 2 })
             });
 
-            [gotchi, svg, withSetsBRS] = await Promise.all([
-          client.readContract({
-            address: DIAMOND_ADDRESS,
-            abi: ABI,
-            functionName: "getAavegotchi",
-            args: [BigInt(gotchiId)]
-          }),
-          client.readContract({
-            address: DIAMOND_ADDRESS,
-            abi: ABI,
-            functionName: "getAavegotchiSvg",
-            args: [BigInt(gotchiId)]
-          }),
-          querySubgraph(gotchiId)
-        ]);
+            const data = await client.readContract({
+              address: DIAMOND_ADDRESS,
+              abi: ABI,
+              functionName: "getAavegotchi",
+              args: [BigInt(gotchiId)]
+            }) as any;
+
+            const svg = await client.readContract({
+              address: DIAMOND_ADDRESS,
+              abi: ABI,
+              functionName: "getAavegotchiSvg",
+              args: [BigInt(gotchiId)]
+            }) as string;
+
+            let brs = Number(data.modifiedRarityScore || data.baseRarityScore || 0);
             
-            break;
+            if (brs === 0) {
+              try {
+                const query = `{
+                  aavegotchi(id: "${gotchiId}") {
+                    withSetsRarityScore
+                  }
+                }`;
+                
+                const response = await fetch(SUBGRAPH_URL, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ query })
+                });
+                
+                const result = await response.json();
+                if (result.data?.aavegotchi?.withSetsRarityScore) {
+                  brs = parseInt(result.data.aavegotchi.withSetsRarityScore);
+                }
+              } catch (e) {
+                console.warn("Subgraph fallback failed:", e);
+              }
+            }
+
+            const cleanSvg = svg
+              .replace(/<g class="gotchi-bg">[\s\S]*?<\/g>/g, '')
+              .replace(/<rect[^>]*class="[^"]*wearable-bg[^"]*"[^>]*\/>/g, '');
+
+            const haunt = parseInt(gotchiId) <= 10000 ? 1 : 2;
+
+            setGotchiData({
+              id: gotchiId,
+              name: data.name || `Gotchi #${gotchiId}`,
+              brs,
+              kinship: Number(data.kinship || 0),
+              experience: Number(data.experience || 0),
+              haunt,
+              level: Number(data.level || 1),
+              collateral: COLLATERALS[data.collateral?.toLowerCase()] || "UNKNOWN",
+              rarity: getRarity(brs),
+              traits: {
+                energy: Number(data.modifiedNumericTraits?.[0] || 0),
+                aggression: Number(data.modifiedNumericTraits?.[1] || 0),
+                spookiness: Number(data.modifiedNumericTraits?.[2] || 0),
+                brainSize: Number(data.modifiedNumericTraits?.[3] || 0)
+              },
+              svg: cleanSvg
+            });
+            setLoading(false);
+            return;
+
           } catch (err: any) {
-            console.warn(`RPC ${rpcUrl} failed:`, err.message);
             lastError = err;
+            console.warn(`Failed with RPC ${rpcUrl}:`, err.message);
           }
         }
 
-        if (!gotchi) {
-          throw lastError || new Error('All RPC endpoints failed');
-        }
+        throw lastError || new Error("All RPC endpoints failed");
 
-        const status = Number((gotchi as any).status);
-        if (status !== 2 && status !== 3) {
-          throw new Error(`Invalid gotchi status: ${status} (not an active gotchi)`);
-        }
-
-        const modifiedBRS = Number((gotchi as any).modifiedRarityScore);
-        const brs = withSetsBRS ? Number(withSetsBRS) : modifiedBRS;
-        const traits = (gotchi as any).modifiedNumericTraits;
-
-        const id = Number(gotchiId);
-        const haunt = id <= 10000 ? 1 : 2;
-
-        const data: GotchiData = {
-          id: gotchiId,
-          name: (gotchi as any).name,
-          brs,
-          kinship: Number((gotchi as any).kinship),
-          experience: Number((gotchi as any).experience),
-          haunt,
-          level: Number((gotchi as any).level),
-          collateral: (() => {
-            const addr = ((gotchi as any).collateral as string).toLowerCase();
-            const name = COLLATERALS[addr];
-            if (!name) {
-              console.warn('Unknown collateral:', addr);
-            }
-            return name || addr.slice(0, 8);
-          })(),
-          rarity: getRarity(brs),
-          traits: {
-            energy: Number(traits[0]),
-            aggression: Number(traits[1]),
-            spookiness: Number(traits[2]),
-            brainSize: Number(traits[3])
-          },
-          svg: (() => {
-            let cleanSvg = svg as string;
-            cleanSvg = cleanSvg.replace(/<g class="gotchi-wearable wearable-bg"><svg[^>]*>[\s\S]*?<\/svg><\/g>/, '');
-            cleanSvg = cleanSvg.replace(/<g class="gotchi-bg">[\s\S]*?<\/g>/, '');
-            
-            const uniqueId = `g${gotchiId}`;
-            const colorClasses = ['gotchi-primary', 'gotchi-secondary', 'gotchi-cheek', 'gotchi-eyeColor', 'gotchi-primary-mouth'];
-            
-            colorClasses.forEach(className => {
-              const regex = new RegExp(`\\.${className}\\b`, 'g');
-              cleanSvg = cleanSvg.replace(regex, `.${uniqueId}-${className}`);
-              const classRegex = new RegExp(`class="${className}"`, 'g');
-              cleanSvg = cleanSvg.replace(classRegex, `class="${uniqueId}-${className}"`);
-            });
-            
-            return cleanSvg;
-          })()
-        };
-
-        setGotchiData(data);
       } catch (err: any) {
-        console.error('Fetch error for gotchi #' + gotchiId + ':', err);
-        const errorMsg = err?.message || err?.toString() || 'Unknown error';
-        setError(`Failed to fetch gotchi #${gotchiId}: ${errorMsg.slice(0, 100)}`);
-      } finally {
+        console.error("Failed to fetch gotchi:", err);
+        setError(err.message || "Failed to load gotchi");
         setLoading(false);
       }
     }
@@ -273,30 +241,31 @@ export default function CardGeneratorClassic({ gotchiId, hideButtons = false }: 
   }, [gotchiId]);
 
   const handleDownload = async () => {
-    if (!cardRef.current || !gotchiData) return;
-    
+    if (!cardRef.current) return;
+    setDownloading(true);
+
     try {
-      setDownloading(true);
-      const dataUrl = await toPng(cardRef.current, {
-        quality: 1.0,
+      const dataUrl = await toPng(cardRef.current, { 
+        quality: 1,
         pixelRatio: 2,
+        backgroundColor: 'transparent'
       });
       
       const link = document.createElement('a');
-      link.download = `gotchi-${gotchiData.id}-${gotchiData.name.toLowerCase().replace(/\s+/g, '-')}-classic.png`;
+      link.download = `gotchi-${gotchiId}-classic.png`;
       link.href = dataUrl;
       link.click();
     } catch (err) {
-      console.error('Download failed:', err);
+      console.error("Download failed:", err);
+      alert("Download failed. Please try again.");
     } finally {
       setDownloading(false);
     }
   };
 
   const handleShare = () => {
-    if (!gotchiData) return;
-    const text = `Check out my Gotchi Grail card for ${gotchiData.name} (#${gotchiData.id})! 👻`;
-    const url = `${window.location.origin}?gotchi=${gotchiData.id}`;
+    const url = `${window.location.origin}/?gotchi=${gotchiId}`;
+    const text = `Check out my Gotchi #${gotchiId}! 👻`;
     
     if (navigator.share) {
       navigator.share({ title: 'Gotchi Grails Classic', text, url });
@@ -359,25 +328,58 @@ export default function CardGeneratorClassic({ gotchiId, hideButtons = false }: 
   const color = rarityColors[gotchiData.rarity];
   const rarityRgb = color.match(/\w\w/g)?.map(x => parseInt(x, 16)).join(', ') || '89, 188, 255';
 
+  // Calculate damage (simple formula for demo)
+  const baseDamage = 99;
+  const levelBonus = gotchiData.level * gotchiData.level;
+  const totalDamage = baseDamage + levelBonus;
+
   return (
     <div className="space-y-6">
-      {/* Classic Card - matches gotchi-cards.html */}
+      {/* Classic Card */}
       <div ref={cardRef} className="relative inline-block">
         <div 
-          className="w-[400px] h-[620px] rounded-[20px] p-5 relative animate-float"
+          className="w-[400px] h-[620px] rounded-[20px] p-5 relative"
           style={{
             background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
             border: `4px solid ${color}`,
-            boxShadow: `0 20px 60px rgba(0,0,0,0.4), 0 0 40px rgba(${rarityRgb}, 0.6), inset 0 0 60px rgba(${rarityRgb}, 0.1)`
+            boxShadow: `0 20px 60px rgba(0,0,0,0.4), 0 0 40px rgba(${rarityRgb}, 0.6), inset 0 0 60px rgba(${rarityRgb}, 0.1)`,
+            animation: 'cardFloat 3s ease-in-out infinite'
           }}
         >
-          {/* Glow effect */}
+          {/* Pulsing glow */}
           <div 
-            className="absolute -top-1 -left-1 -right-1 -bottom-1 rounded-[20px] -z-10 blur-[20px] animate-pulse"
+            className="absolute -top-1 -left-1 -right-1 -bottom-1 rounded-[20px] -z-10"
             style={{
-              background: `linear-gradient(135deg, rgba(${rarityRgb}, 0.3) 0%, rgba(${rarityRgb}, 0.1) 50%, rgba(${rarityRgb}, 0.3) 100%)`
+              background: `linear-gradient(135deg, rgba(${rarityRgb}, 0.3) 0%, rgba(${rarityRgb}, 0.1) 50%, rgba(${rarityRgb}, 0.3) 100%)`,
+              filter: 'blur(20px)',
+              animation: 'pulse 3s ease-in-out infinite'
             }}
           />
+
+          {/* Top-left: Rarity badge */}
+          <div 
+            className="absolute top-[25px] left-[25px] px-[10px] py-[5px] rounded-[15px] text-white text-[11px] font-bold tracking-wider uppercase"
+            style={{
+              background: `linear-gradient(135deg, rgba(${rarityRgb}, 0.9) 0%, rgba(${rarityRgb}, 0.7) 100%)`,
+              border: `3px solid ${color}`,
+              boxShadow: `0 4px 8px rgba(${rarityRgb}, 0.4)`,
+              letterSpacing: '0.5px'
+            }}
+          >
+            {gotchiData.rarity.toUpperCase()}
+          </div>
+
+          {/* Top-right: BRS badge */}
+          <div 
+            className="absolute top-[25px] right-[25px] px-[10px] py-[5px] rounded-[15px] text-white text-[11px] font-bold"
+            style={{
+              background: `linear-gradient(135deg, rgba(${rarityRgb}, 0.9) 0%, rgba(${rarityRgb}, 0.7) 100%)`,
+              border: `3px solid ${color}`,
+              boxShadow: `0 4px 8px rgba(${rarityRgb}, 0.4)`
+            }}
+          >
+            BRS {gotchiData.brs}
+          </div>
 
           {/* Header */}
           <div className="text-center text-[#2d3436] text-base font-bold mb-2 uppercase tracking-[3px]">
@@ -385,12 +387,12 @@ export default function CardGeneratorClassic({ gotchiId, hideButtons = false }: 
           </div>
 
           <div className="text-center font-bold mb-3 tracking-[2px] text-xs" style={{ color }}>
-            #{gotchiData.id} • HAUNT {gotchiData.haunt} • {gotchiData.rarity.toUpperCase()}
+            #{gotchiData.id} - H{gotchiData.haunt}
           </div>
 
           {/* Gotchi art */}
           <div 
-            className="w-[360px] mx-auto mb-4 h-[260px] rounded-[15px] flex items-center justify-center overflow-hidden relative"
+            className="w-[360px] h-[260px] mx-auto mb-[15px] rounded-[15px] flex items-center justify-center overflow-hidden relative"
             style={{
               background: `radial-gradient(circle at center, rgba(${rarityRgb}, 0.1) 0%, white 60%)`,
               border: `4px solid ${color}`,
@@ -407,9 +409,9 @@ export default function CardGeneratorClassic({ gotchiId, hideButtons = false }: 
             />
           </div>
 
-          {/* Stats */}
+          {/* Stats container */}
           <div 
-            className="w-[360px] mx-auto rounded-xl p-3 mb-4"
+            className="w-[360px] mx-auto rounded-xl p-3 mb-[15px]"
             style={{
               background: 'rgba(255,255,255,0.95)',
               border: `3px solid ${color}`,
@@ -417,22 +419,40 @@ export default function CardGeneratorClassic({ gotchiId, hideButtons = false }: 
             }}
           >
             {[
-              { label: 'BRS', value: gotchiData.brs, max: 600 },
-              { label: 'KIN', value: gotchiData.kinship, max: 10000 },
-              { label: 'XP', value: gotchiData.experience, max: 50000 },
-              { label: 'LEVEL', value: gotchiData.level, max: 99 }
+              { label: 'NRG', icon: '⚡', value: gotchiData.traits.energy, max: 100 },
+              { label: 'AGG', icon: '🔥', value: gotchiData.traits.aggression, max: 100 },
+              { label: 'SPK', icon: '👻', value: gotchiData.traits.spookiness, max: 100 },
+              { label: 'BRN', icon: '🧠', value: gotchiData.traits.brainSize, max: 100 }
             ].map((stat, i) => (
               <div key={i} className="flex justify-between items-center my-2 text-[11px] tracking-wider">
-                <span className="text-[#2d3436] font-bold min-w-[70px]">{stat.label}</span>
-                <div className="flex-1 h-[10px] bg-[#ecf0f1] rounded-full mx-2 overflow-hidden">
+                <span className="text-[#2d3436] font-bold min-w-[70px] flex items-center gap-1.5">
+                  <span className="text-base">{stat.icon}</span>
+                  {stat.label}
+                </span>
+                <div 
+                  className="flex-1 h-[10px] rounded-[5px] mx-2 overflow-hidden"
+                  style={{
+                    background: '#ecf0f1',
+                    border: `2px solid ${color}`
+                  }}
+                >
                   <div 
-                    className="h-full rounded-full transition-all duration-500"
+                    className="h-full rounded-[5px] relative"
                     style={{
                       width: `${Math.min((stat.value / stat.max) * 100, 100)}%`,
-                      background: `linear-gradient(90deg, ${color} 0%, ${color}CC 100%)`,
-                      boxShadow: `0 0 8px rgba(${rarityRgb}, 0.6)`
+                      background: `linear-gradient(90deg, ${color} 0%, ${color}B3 100%)`,
+                      boxShadow: `0 0 10px rgba(${rarityRgb}, 0.5)`,
+                      transition: 'width 0.5s ease'
                     }}
-                  />
+                  >
+                    <div 
+                      className="absolute inset-0"
+                      style={{
+                        background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%)',
+                        animation: 'shimmer 2s infinite'
+                      }}
+                    />
+                  </div>
                 </div>
                 <span className="text-base font-bold min-w-[30px] text-right" style={{ color, textShadow: `0 0 5px rgba(${rarityRgb}, 0.5)` }}>
                   {stat.value}
@@ -441,29 +461,61 @@ export default function CardGeneratorClassic({ gotchiId, hideButtons = false }: 
             ))}
           </div>
 
-          {/* Traits */}
-          <div className="grid grid-cols-4 gap-2">
-            {Object.entries(gotchiData.traits).map(([key, value], i) => (
+          {/* Moves container */}
+          <div 
+            className="w-[360px] mx-auto rounded-[10px] p-[10px] relative"
+            style={{
+              background: `linear-gradient(135deg, rgba(${rarityRgb}, 0.9) 0%, rgba(${rarityRgb}, 0.7) 100%)`,
+              color: 'white',
+              border: `3px solid ${color}`,
+              boxShadow: `0 4px 12px rgba(${rarityRgb}, 0.4)`
+            }}
+          >
+            {/* Title row with badges */}
+            <div className="flex items-center justify-center relative mb-1.5">
+              {/* Left: KIN badge (INVERTED) */}
               <div 
-                key={i}
-                className="rounded-lg p-2 text-center text-xs font-bold"
+                className="absolute left-0 px-[10px] py-[5px] rounded-[15px] text-[11px] font-bold uppercase tracking-wider"
                 style={{
-                  background: 'rgba(255,255,255,0.9)',
-                  border: `2px solid ${color}`
+                  background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%)',
+                  color: color,
+                  border: `3px solid ${color}`,
+                  boxShadow: `0 4px 8px rgba(${rarityRgb}, 0.4)`,
+                  textShadow: '0 1px 2px rgba(0,0,0,0.1)'
                 }}
               >
-                <div className="text-base" style={{ color }}>{value}</div>
-                <div className="text-[#7f8c8d] uppercase text-[10px] mt-1">
-                  {['NRG', 'AGR', 'SPK', 'BRN'][i]}
-                </div>
+                KIN {gotchiData.kinship}
               </div>
-            ))}
-          </div>
 
-          {/* Footer */}
-          <div className="absolute bottom-3 left-5 right-5 flex justify-between text-[10px] text-[#95a5a6]">
-            <span className="font-bold">GOTCHI GRAILS™ CLASSIC</span>
-            <span>© 2026</span>
+              {/* Center: SKILL title */}
+              <div className="text-xs uppercase tracking-[2px] opacity-90">
+                SKILL
+              </div>
+
+              {/* Right: LEVEL badge (INVERTED) */}
+              <div 
+                className="absolute right-0 px-[10px] py-[5px] rounded-[15px] text-[11px] font-bold tracking-wider"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%)',
+                  color: color,
+                  border: `3px solid ${color}`,
+                  boxShadow: `0 4px 8px rgba(${rarityRgb}, 0.4)`,
+                  textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                }}
+              >
+                LV {gotchiData.level}
+              </div>
+            </div>
+
+            {/* Move name */}
+            <div className="text-[13px] font-bold text-white text-center mt-1.5 mb-1.5 tracking-wider">
+              HAUNTING CURSE
+            </div>
+
+            {/* Damage */}
+            <div className="text-[10px] text-white text-center tracking-wider opacity-90">
+              DMG: {baseDamage} + ({gotchiData.level} × {gotchiData.level}) = {totalDamage}
+            </div>
           </div>
         </div>
       </div>
@@ -498,12 +550,17 @@ export default function CardGeneratorClassic({ gotchiId, hideButtons = false }: 
       )}
 
       <style jsx>{`
-        @keyframes float {
+        @keyframes cardFloat {
           0%, 100% { transform: translateY(0px); }
           50% { transform: translateY(-10px); }
         }
-        .animate-float {
-          animation: float 3s ease-in-out infinite;
+        @keyframes pulse {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 1; }
+        }
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
         }
       `}</style>
     </div>
