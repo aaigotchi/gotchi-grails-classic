@@ -579,3 +579,4 @@ export default function CardGeneratorClassic({
     </div>
   );
 }
+// Force rebuild Fri Feb 27 02:50:43 UTC 2026
