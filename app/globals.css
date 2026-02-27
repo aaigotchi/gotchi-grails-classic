@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Pixelar';
+  src: url('https://cdn.jsdelivr.net/gh/fxclaw/fonts@main/pixelar/Pixelar-Regular.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --background: #1a1a2e;
+  --foreground: #ffffff;
+}
+
+body {
+  font-family: 'Pixelar', monospace;
+  background: var(--background);
+  color: var(--foreground);
+}
